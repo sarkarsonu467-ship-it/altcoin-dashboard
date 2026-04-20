@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Top 50 Altcoins — ATH Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f0f11;
+      --surface: #17171a;
+      --surface2: #1e1e23;
+      --border: rgba(255,255,255,0.08);
+      --border2: rgba(255,255,255,0.14);
+      --text: #f0f0f2;
+      --muted: #888890;
+      --green: #1D9E75;
+      --green-light: #5DCAA5;
+      --amber: #EF9F27;
+      --red: #E24B4A;
+      --red-dark: #A32D2D;
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+    body { font-family: 'DM Mono', 'Fira Mono', monospace; background: var(--bg); color: var(--text); min-height: 100vh; padding: 2rem 1.5rem; }
+    header { margin-bottom: 2rem; }
+    header h1 { font-size: 22px; font-weight: 500; letter-spacing: -0.5px; }
+    header p { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    #controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 1.25rem; }
+    #controls input, #controls select { padding: 8px 12px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); outline: none; }
+    #controls input { flex: 1; min-width: 180px; }
+    #controls input::placeholder { color: var(--muted); }
+    #controls input:focus, #controls select:focus { border-color: rgba(255,255,255,0.3); }
+    .btn { padding: 8px 16px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); cursor: pointer; transition: background 0.15s; }
+    .btn:hover { background: var(--surface2); }
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+    .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 0.85rem 1rem; }
+    .card-label { font-size: 11px; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .card-val { font-size: 20px; font-weight: 500; }
+    #wrap { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; overflow-y: auto; max-height: 620px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { font-size: 11px; font-weight: 500; color: var(--muted); text-align: left; padding: 10px 12px; border-bottom: 0.5px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+    tbody tr { border-bottom: 0.5px solid var(--border); transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody tr.ath-near { background: rgba(29,158,117,0.05); }
+    tbody tr.ath-near:hover { background: rgba(29,158,117,0.09); }
+    td { padding: 10px 12px; vertical-align: middle; }
+    .rank-n { color: var(--muted); font-size: 12px; }
+    .coin-cell { display: flex; align-items: center; gap: 9px; }
+    .avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; flex-shrink: 0; }
+    .sym { font-weight: 500; font-size: 13px; }
+    .nm { font-size: 11px; color: var(--muted); }
+    .bar-bg { width: 80px; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; margin-top: 5px; }
+    .bar-fg { height: 100%; border-radius: 2px; }
+    .status { text-align: center; padding: 3rem; color: var(--muted); font-size: 14px; }
+    .err { color: #E24B4A; }
+    .ts { font-size: 11px; color: var(--muted); margin-top: 10px; text-align: right; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header>
+  <h1>Top 50 Altcoins — ATH Dashboard</h1>
+  <p>Live prices &amp; distance from all-time high · Data via CoinGecko</p>
+</header>
+
+<div id="controls">
+  <input type="text" id="q" placeholder="Search symbol or name..." oninput="render()">
+  <select id="srt" onchange="render()">
+    <option value="rank">By rank</option>
+    <option value="close">Closest to ATH</option>
+    <option value="far">Furthest from ATH</option>
+    <option value="price">Highest price</option>
+  </select>
+  <button class="btn" onclick="init()">↻ Refresh</button>
+</div>
+
+<div class="summary" id="sum"></div>
+<div id="wrap"><div class="status">Loading…</div></div>
+<div class="ts" id="ts"></div>
+
+<script>
+const COINS = [
+  {r:2,  id:'ethereum',            s:'ETH',   n:'Ethereum',            color:'#627EEA'},
+  {r:3,  id:'tether',              s:'USDT',  n:'Tether',              color:'#26A17B'},
+  {r:4,  id:'xrp',                 s:'XRP',   n:'XRP',                 color:'#346AA9'},
+  {r:5,  id:'bnb',                 s:'BNB',   n:'BNB',                 color:'#F3BA2F'},
+  {r:6,  id:'solana',              s:'SOL',   n:'Solana',              color:'#9945FF'},
+  {r:7,  id:'usd-coin',            s:'USDC',  n:'USD Coin',            color:'#2775CA'},
+  {r:8,  id:'dogecoin',            s:'DOGE',  n:'Dogecoin',            color:'#C2A633'},
+  {r:9,  id:'cardano',             s:'ADA',   n:'Cardano',             color:'#0033AD'},
+  {r:10, id:'tron',                s:'TRX',   n:'TRON',                color:'#FF0013'},
+  {r:11, id:'avalanche-2',         s:'AVAX',  n:'Avalanche',           color:'#E84142'},
+  {r:12, id:'sui',                 s:'SUI',   n:'Sui',                 color:'#4CA3FF'},
+  {r:13, id:'chainlink',           s:'LINK',  n:'Chainlink',           color:'#375BD2'},
+  {r:14, id:'shiba-inu',           s:'SHIB',  n:'Shiba Inu',           color:'#FFA409'},
+  {r:15, id:'stellar',             s:'XLM',   n:'Stellar',             color:'#7D00FF'},
+  {r:16, id:'hedera-hashgraph',    s:'HBAR',  n:'Hedera',              color:'#5D8AA8'},
+  {r:17, id:'bitcoin-cash',        s:'BCH',   n:'Bitcoin Cash',        color:'#8DC351'},
+  {r:18, id:'hyperliquid',         s:'HYPE',  n:'Hyperliquid',         color:'#00C2FF'},
+  {r:19, id:'litecoin',            s:'LTC',   n:'Litecoin',            color:'#BFBBBB'},
+  {r:20, id:'polkadot',            s:'DOT',   n:'Polkadot',            color:'#E6007A'},
+  {r:21, id:'leo-token',           s:'LEO',   n:'LEO Token',           color:'#F5A623'},
+  {r:22, id:'uniswap',             s:'UNI',   n:'Uniswap',             color:'#FF007A'},
+  {r:23, id:'monero',              s:'XMR',   n:'Monero',              color:'#FF6600'},
+  {r:24, id:'pepe',                s:'PEPE',  n:'Pepe',                color:'#4CAF50'},
+  {r:25, id:'near',                s:'NEAR',  n:'NEAR Protocol',       color:'#00C08B'},
+  {r:26, id:'aave',                s:'AAVE',  n:'Aave',                color:'#B6509E'},
+  {r:27, id:'aptos',               s:'APT',   n:'Aptos',               color:'#00B5D8'},
+  {r:28, id:'internet-computer',   s:'ICP',   n:'Internet Computer',   color:'#29ABE2'},
+  {r:29, id:'ethereum-classic',    s:'ETC',   n:'Ethereum Classic',    color:'#328332'},
+  {r:30, id:'cronos',              s:'CRO',   n:'Cronos',              color:'#103F68'},
+  {r:31, id:'render-token',        s:'RENDER',n:'Render',              color:'#FF5F00'},
+  {r:32, id:'kaspa',               s:'KAS',   n:'Kaspa',               color:'#49EACB'},
+  {r:33, id:'ondo-finance',        s:'ONDO',  n:'Ondo',                color:'#5B5EA6'},
+  {r:34, id:'cosmos',              s:'ATOM',  n:'Cosmos',              color:'#6F7390'},
+  {r:35, id:'vechain',             s:'VET',   n:'VeChain',             color:'#15BDFF'},
+  {r:36, id:'mantra-dao',          s:'OM',    n:'MANTRA',              color:'#E4572E'},
+  {r:37, id:'filecoin',            s:'FIL',   n:'Filecoin',            color:'#0090FF'},
+  {r:38, id:'algorand',            s:'ALGO',  n:'Algorand',            color:'#6B8F71'},
+  {r:39, id:'arbitrum',            s:'ARB',   n:'Arbitrum',            color:'#28A0F0'},
+  {r:40, id:'optimism',            s:'OP',    n:'Optimism',            color:'#FF0420'},
+  {r:41, id:'bonk',                s:'BONK',  n:'Bonk',                color:'#FC8F00'},
+  {r:42, id:'sei-network',         s:'SEI',   n:'Sei',                 color:'#9B1A4A'},
+  {r:43, id:'the-graph',           s:'GRT',   n:'The Graph',           color:'#6747ED'},
+  {r:44, id:'injective-protocol',  s:'INJ',   n:'Injective',           color:'#00B2FF'},
+  {r:45, id:'immutable-x',         s:'IMX',   n:'Immutable',           color:'#17B5CB'},
+  {r:46, id:'floki',               s:'FLOKI', n:'Floki',               color:'#F5941D'},
+  {r:47, id:'maker',               s:'MKR',   n:'Maker',               color:'#1AAB9B'},
+  {r:48, id:'theta-token',         s:'THETA', n:'Theta',               color:'#2AB8E6'},
+  {r:49, id:'stacks',              s:'STX',   n:'Stacks',              color:'#5546FF'},
+  {r:50, id:'fantom',              s:'FTM',   n:'Fantom',              color:'#1969FF'},
+];
+
+let data = [];
+
+async function init() {
+  document.getElementById('wrap').innerHTML = '<div class="status">Fetching live data…</div>';
+  document.getElementById('sum').innerHTML = '';
+  const ids = COINS.map(c => c.id).join(',');
+  const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&per_page=50&page=1&sparkline=false&price_change_percentage=24h`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status);
+    const raw = await res.json();
+    data = COINS.map(c => {
+      const d = raw.find(r => r.id === c.id) || {};
+      return { ...c, price: d.current_price||0, ath: d.ath||0, athDate: d.ath_date||null, dist: d.ath_change_percentage||0, ch24: d.price_change_percentage_24h||0, mcap_rank: d.market_cap_rank||c.r };
+    }).filter(c => c.ath > 0);
+    renderSummary();
+    render();
+    document.getElementById('ts').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    document.getElementById('wrap').innerHTML = `<div class="status err">API error (${e.message}). CoinGecko may be rate-limiting — wait 30s and refresh.</div>`;
+  }
+}
+
+function renderSummary() {
+  const near = data.filter(c => Math.abs(c.dist) < 10).length;
+  const avg = (data.reduce((s,c) => s+c.dist, 0) / data.length).toFixed(1);
+  const cl = [...data].sort((a,b) => b.dist - a.dist)[0];
+  const fr = [...data].sort((a,b) => a.dist - b.dist)[0];
+  document.getElementById('sum').innerHTML = `
+    <div class="card"><div class="card-label">Tracked</div><div class="card-val">${data.length}</div></div>
+    <div class="card"><div class="card-label">Near ATH &lt;10%</div><div class="card-val" style="color:#1D9E75">${near}</div></div>
+    <div class="card"><div class="card-label">Avg from ATH</div><div class="card-val" style="color:#E24B4A">${avg}%</div></div>
+    <div class="card"><div class="card-label">Closest</div><div class="card-val" style="font-size:13px">${cl.s} <span style="color:#1D9E75">${cl.dist.toFixed(1)}%</span></div></div>
+    <div class="card"><div class="card-label">Furthest</div><div class="card-val" style="font-size:13px">${fr.s} <span style="color:#A32D2D">${fr.dist.toFixed(1)}%</span></div></div>
+  `;
+}
+
+function fmtP(n) {
+  if (!n) return '—';
+  if (n >= 1e6) return '$'+(n/1e6).toFixed(2)+'M';
+  if (n >= 1000) return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if (n >= 1) return '$'+n.toFixed(4);
+  if (n >= 0.001) return '$'+n.toFixed(6);
+  return '$'+n.toFixed(8);
+}
+
+function fmtD(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-US',{month:'short',year:'numeric'});
+}
+
+function dCol(p) {
+  const a = Math.abs(p);
+  if (a < 10) return '#1D9E75';
+  if (a < 30) return '#EF9F27';
+  if (a < 60) return '#E24B4A';
+  return '#A32D2D';
+}
+
+function initials(n) { return n.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+
+function render() {
+  const q = document.getElementById('q').value.toLowerCase();
+  const srt = document.getElementById('srt').value;
+  let coins = data.filter(c => !q || c.s.toLowerCase().includes(q) || c.n.toLowerCase().includes(q));
+  if (srt === 'close') coins.sort((a,b) => b.dist - a.dist);
+  else if (srt === 'far') coins.sort((a,b) => a.dist - b.dist);
+  else if (srt === 'price') coins.sort((a,b) => b.price - a.price);
+  else coins.sort((a,b) => a.mcap_rank - b.mcap_rank);
+
+  if (!coins.length) { document.getElementById('wrap').innerHTML = '<div class="status">No results.</div>'; return; }
+
+  const rows = coins.map(c => {
+    const bw = Math.min(100, Math.max(0, 100 + c.dist));
+    const col = dCol(c.dist);
+    const cc = c.ch24 >= 0 ? '#1D9E75' : '#E24B4A';
+    return `<tr class="${Math.abs(c.dist)<10?'ath-near':''}">
+      <td class="rank-n">${c.mcap_rank}</td>
+      <td><div class="coin-cell">
+        <div class="avatar" style="background:${c.color}22;color:${c.color}">${initials(c.n)}</div>
+        <div><div class="sym">${c.s}</div><div class="nm">${c.n}</div></div>
+      </div></td>
+      <td style="font-weight:500">${fmtP(c.price)}</td>
+      <td style="color:${cc};font-size:12px">${c.ch24>=0?'+':''}${c.ch24.toFixed(2)}%</td>
+      <td style="color:#5DCAA5;font-weight:500">${fmtP(c.ath)}</td>
+      <td style="font-size:11px;color:var(--muted)">${fmtD(c.athDate)}</td>
+      <td>
+        <span style="font-weight:500;color:${col}">${c.dist.toFixed(1)}%</span>
+        <div class="bar-bg"><div class="bar-fg" style="width:${bw}%;background:${col}"></div></div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('wrap').innerHTML = `
+    <table>
+      <thead><tr><th>#</th><th>Coin</th><th>Live price</th><th>24h</th><th>All-time high</th><th>ATH date</th><th>From ATH</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+init();
+</script>
+</body>
+</html>
